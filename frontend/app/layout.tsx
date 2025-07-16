@@ -4,7 +4,6 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'Leaf Disease Prediction',
   description: 'Leaf Disease Prediction using Machine Learning and ONNX',
-  // You can optionally add icons here for simple favicon support
   icons: {
     icon: '/favicon-32x32.png',
     apple: '/apple-icon-180x180.png',
