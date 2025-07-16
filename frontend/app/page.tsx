@@ -15,7 +15,7 @@ interface PredictionResult {
   image_url: string
 }
 
-const BACKEND_URL = "http://127.0.0.1:5001"
+const BACKEND_URL = "https://lds-bw2e.onrender.com"
 
 export default function LeafDiseaseClassifier() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)

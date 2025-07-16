@@ -153,7 +153,7 @@ def index():
         pred_idx = np.argmax(probs)
         pred_class = class_names[pred_idx]
         friendly_pred = friendly_labels.get(pred_class, pred_class)
-        confidence = probs[pred_idx] * 100
+        confidence = float(probs[pred_idx] * 100)
         description, prevention = generate_description_and_prevention(friendly_pred)
         return jsonify({
             'prediction': friendly_pred,
