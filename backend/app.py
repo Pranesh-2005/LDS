@@ -117,8 +117,10 @@ def generate_description_and_prevention(disease_name):
     return description, prevention
 
 
+
 def load_model():
-    return ort.InferenceSession("leaf_model.onnx")
+    model_path = os.path.join(os.path.dirname(__file__), "leaf_model.onnx")
+    return ort.InferenceSession(model_path)
 
 def preprocess_image(image, size=(224, 224)):
     image = image.resize(size)
