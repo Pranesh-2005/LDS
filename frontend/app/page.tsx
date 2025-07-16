@@ -36,12 +36,13 @@ export default function LeafDiseaseClassifier() {
     }
   }, [])
 
+  // Drag & Drop handlers
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
       setIsDragOver(false)
-      const files = Array.from(e.dataTransfer.files)
-      if (files.length > 0) {
+      const files = e.dataTransfer.files
+      if (files && files.length > 0) {
         handleFileSelect(files[0])
       }
     },
@@ -58,10 +59,10 @@ export default function LeafDiseaseClassifier() {
     setIsDragOver(false)
   }, [])
 
+  // File input change
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (files && files.length > 0) {
-      handleFileSelect(files[0])
+    if (e.target.files && e.target.files.length > 0) {
+      handleFileSelect(e.target.files[0])
     }
   }
 
@@ -83,8 +84,6 @@ export default function LeafDiseaseClassifier() {
         body: formData,
       })
 
-      console.log("Response status:", response.status)
-
       if (!response.ok) {
         const errorText = await response.text()
         console.error("Backend error response:", errorText)
@@ -92,10 +91,9 @@ export default function LeafDiseaseClassifier() {
       }
 
       const data: PredictionResult = await response.json()
-      console.log("Response data:", data)
       setResult(data)
     } catch (err) {
-      setError("Failed to classify the image. Please make sure the backend is running on localhost:5000")
+      setError("Failed to classify the image. Please make sure the backend is running and accessible.")
       console.error("Error:", err)
       setResult(null)
     } finally {
@@ -133,54 +131,60 @@ export default function LeafDiseaseClassifier() {
                 <Camera className="h-5 w-5" />
                 Upload Leaf Image
               </CardTitle>
-              <CardDescription>Drag and drop an image or click to browse</CardDescription>
+              <CardDescription>Drag and drop an image or tap to browse</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Drag & Drop Area */}
-              <div
-                className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
-                  isDragOver
-                    ? "border-green-500 bg-green-50"
-                    : "border-gray-300 hover:border-green-400 hover:bg-green-50"
-                }`}
-                onDrop={handleDrop}
+              {/* Upload Area with fixed mobile support */}
+              <label
+                htmlFor="file-input"
+                className={`relative block border-2 border-dashed rounded-lg p-8 text-center cursor-pointer select-none
+                  ${
+                    isDragOver
+                      ? "border-green-500 bg-green-50"
+                      : "border-gray-300 hover:border-green-400 hover:bg-green-50"
+                  }
+                `}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
-                onClick={() => {
-                  // Forward click to hidden input
-                  document.getElementById("file-input")?.click()
-                }}
+                onDrop={handleDrop}
               >
                 {previewUrl ? (
-                  <div className="space-y-4">
+                  <>
                     <img
                       src={previewUrl}
                       alt="Preview"
                       className="max-w-full max-h-64 mx-auto rounded-lg shadow-md object-contain"
                     />
-                    <p className="text-sm text-gray-600">{selectedFile?.name}</p>
-                  </div>
+                    <p className="text-sm text-gray-600 mt-2">{selectedFile?.name}</p>
+                  </>
                 ) : (
-                  <div className="space-y-4">
-                    <Upload className="h-12 w-12 text-gray-400 mx-auto" />
-                    <div>
-                      <p className="text-lg font-medium text-gray-700">Drop your leaf image here</p>
-                      <p className="text-sm text-gray-500">or click to browse files</p>
-                    </div>
-                  </div>
+                  <>
+                    <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-lg font-medium text-gray-700">Drop your leaf image here</p>
+                    <p className="text-sm text-gray-500">or tap to browse files</p>
+                  </>
                 )}
+                {/* Invisible input covers entire label for tap support */}
                 <input
                   id="file-input"
                   type="file"
                   accept="image/*"
+                  capture="environment"
                   onChange={handleFileInputChange}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  aria-label="Upload leaf image"
                 />
-              </div>
+              </label>
 
               {/* Action Buttons */}
               <div className="flex gap-3">
-                <Button type="button" onClick={handleSubmit} disabled={!selectedFile || isLoading} className="flex-1" size="lg">
+                <Button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={!selectedFile || isLoading}
+                  className="flex-1"
+                  size="lg"
+                >
                   {isLoading ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
