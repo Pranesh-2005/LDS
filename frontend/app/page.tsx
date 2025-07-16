@@ -166,14 +166,14 @@ export default function LeafDiseaseClassifier() {
                 )}
                 {/* Invisible input covers entire label for tap support */}
                 <input
-                  id="file-input"
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleFileInputChange}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  aria-label="Upload leaf image"
-                />
+  id="file-input"
+  type="file"
+  accept="image/*"
+  onChange={handleFileInputChange}
+  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+  aria-label="Upload leaf image"
+/>
+
               </label>
 
               {/* Action Buttons */}
