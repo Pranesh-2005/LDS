@@ -1,22 +1,23 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS  # Add this import
+from flask_cors import CORS
 from PIL import Image
 import numpy as np
 import onnxruntime as ort
 import os
 import openai
-from dotenv import load_dotenv  # Add this import
+from dotenv import load_dotenv
+import threading
+import time
 
 # Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-
-
+# Class names from model
 class_names = [
     'Apple___Apple_scab', 'Apple___Black_rot', 'Apple___Cedar_apple_rust', 'Apple___healthy',
     'Blueberry___healthy', 'Cherry_(including_sour)___Powdery_mildew', 'Cherry_(including_sour)___healthy',
@@ -33,7 +34,7 @@ class_names = [
     'Tomato___healthy'
 ]
 
-
+# Friendly display labels
 friendly_labels = {
     'Apple___Apple_scab': 'Apple scab',
     'Apple___Black_rot': 'Black rot',
@@ -75,8 +76,7 @@ friendly_labels = {
     'Tomato___healthy': 'Healthy'
 }
 
-
-# Set your Azure OpenAI credentials
+# Azure OpenAI configuration
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY")
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT")
@@ -116,8 +116,6 @@ def generate_description_and_prevention(disease_name):
             prevention = line.split(":", 1)[1].strip()
     return description, prevention
 
-
-
 def load_model():
     model_path = os.path.join(os.path.dirname(__file__), "leaf_model.onnx")
     return ort.InferenceSession(model_path)
@@ -129,8 +127,22 @@ def preprocess_image(image, size=(224, 224)):
     img_array = np.expand_dims(img_array, axis=0)
     return img_array
 
-learn = load_model()
+def cleanup_uploads(folder, lifetime=3600):
+    while True:
+        now = time.time()
+        for filename in os.listdir(folder):
+            file_path = os.path.join(folder, filename)
+            if os.path.isfile(file_path):
+                file_age = now - os.path.getmtime(file_path)
+                if file_age > lifetime:
+                    try:
+                        os.remove(file_path)
+                        print(f"Deleted: {file_path}")
+                    except Exception as e:
+                        print(f"Failed to delete {file_path}: {e}")
+        time.sleep(600)  # Check every 10 minutes
 
+learn = load_model()
 
 @app.route('/', methods=['POST'])
 def index():
@@ -164,7 +176,8 @@ def index():
         })
     return jsonify({'error': 'Unknown error'}), 500
 
-
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5001))
+    cleanup_thread = threading.Thread(target=cleanup_uploads, args=(app.config['UPLOAD_FOLDER'],), daemon=True)
+    cleanup_thread.start()
     app.run(host="0.0.0.0", port=port)
