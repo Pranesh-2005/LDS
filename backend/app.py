@@ -57,17 +57,20 @@ AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 def generate_description_and_prevention(label):
     if label == "not_a_crop":
         return (
-            "The uploaded image does not seem to depict a recognizable fruit or leaf.",
-            "Please ensure the image clearly shows a single crop, preferably a close-up of a fruit or diseased leaf."
+            "The uploaded image does not seem to show a valid crop or leaf.",
+            "Please upload a clear image of a single crop or a leaf showing disease symptoms."
         )
 
     prompt = (
-        f"Provide a concise, clear description and point-wise prevention methods for the following plant disease or condition: '{label}'.\n"
-        "Format:\n"
+        f"Explain in simple words what the plant disease or condition '{label}' is, and give 2 to 4 clear, practical prevention tips.\n"
+        "Use this format:\n"
         "Description:\n"
-        "- ...\n"
+        "Explain briefly what this disease is and how it affects the plant.\n"
         "Prevention:\n"
-        "- ... (2-4 bullet points)"
+        "- Tip 1\n"
+        "- Tip 2\n"
+        "- (Optional) Tip 3\n"
+        "- (Optional) Tip 4"
     )
 
     try:
@@ -84,7 +87,7 @@ def generate_description_and_prevention(label):
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            max_tokens=2000
+            max_tokens=1500
         )
 
         content = response.choices[0].message.content
