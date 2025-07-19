@@ -6,7 +6,7 @@ COPY backend/requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY backend/ ./backend/
-COPY backend/leaf_model.onnx ./backend/leaf_model.onnx
+COPY backend/model.onnx ./backend/model.onnx
 
 # Ensure upload folder exists
 
