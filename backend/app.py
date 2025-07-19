@@ -9,31 +9,45 @@ from dotenv import load_dotenv
 import threading
 import time
 import ast
+import sys
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
+
+app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Load and clean class names
-with open('class_names.txt', 'r') as f:
-    line = f.read()
+# === Load and clean class names ===
+try:
+    class_file_path = os.path.join(os.path.dirname(__file__), 'class_names.txt')
+    with open(class_file_path, 'r') as f:
+        raw_line = f.read()
+    class_names = ast.literal_eval(raw_line.replace("Classes: ", "").strip())
 
-# Parse list and assign to class_names
-class_names = ast.literal_eval(line.replace("Classes: ", "").strip())
+    # Optional: rewrite cleaned names
+    with open(class_file_path, 'w') as f:
+        for cls in class_names:
+            f.write(cls + '\n')
 
-# Overwrite file with clean class names (optional)
-with open('class_names.txt', 'w') as f:
-    for cls in class_names:
-        f.write(cls + '\n')
+except FileNotFoundError:
+    print("[ERROR] class_names.txt not found. Make sure it's present in the backend directory.")
+    sys.exit(1)
+except Exception as e:
+    print(f"[ERROR] Failed to load class names: {e}")
+    sys.exit(1)
 
-# Load ONNX model
-learn = ort.InferenceSession("model.onnx")
+# === Load ONNX model ===
+try:
+    model_path = os.path.join(os.path.dirname(__file__), 'model.onnx')
+    learn = ort.InferenceSession(model_path)
+except Exception as e:
+    print(f"[ERROR] Failed to load ONNX model: {e}")
+    sys.exit(1)
 
-# Azure OpenAI setup
+# === Azure OpenAI setup ===
 openai.api_type = "azure"
 openai.api_base = os.getenv("AZURE_OPENAI_ENDPOINT")
 openai.api_version = "2024-12-01-preview"
@@ -56,35 +70,34 @@ def generate_description_and_prevention(label):
         "- ... (2-4 bullet points)"
     )
 
-    client = openai.AzureOpenAI(
-        api_key=openai.api_key,
-        api_version=openai.api_version,
-        azure_endpoint=openai.api_base
-    )
+    try:
+        client = openai.AzureOpenAI(
+            api_key=openai.api_key,
+            api_version=openai.api_version,
+            azure_endpoint=openai.api_base
+        )
 
-    response = client.chat.completions.create(
-        model=AZURE_OPENAI_DEPLOYMENT,
-        messages=[
-            {"role": "system", "content": "You are a knowledgeable plant pathologist."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        max_tokens=2000
-    )
+        response = client.chat.completions.create(
+            model=AZURE_OPENAI_DEPLOYMENT,
+            messages=[
+                {"role": "system", "content": "You are a knowledgeable plant pathologist."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2000
+        )
 
-    content = response.choices[0].message.content
-    description = "No description available."
-    prevention = "No prevention steps available."
-
-    if "Description:" in content and "Prevention:" in content:
-        try:
+        content = response.choices[0].message.content
+        if "Description:" in content and "Prevention:" in content:
             parts = content.split("Prevention:")
             description = parts[0].replace("Description:", "").strip()
             prevention = parts[1].strip()
-        except Exception:
-            pass
-
-    return description, prevention
+            return description, prevention
+        else:
+            return "Description not structured correctly.", "No prevention steps found."
+    except Exception as e:
+        print(f"[ERROR] OpenAI API error: {e}")
+        return "OpenAI error.", "Failed to generate prevention steps."
 
 def preprocess_image(image, size=(224, 224)):
     image = image.resize(size)
@@ -98,14 +111,12 @@ def cleanup_uploads(folder, lifetime=3600):
         now = time.time()
         for filename in os.listdir(folder):
             file_path = os.path.join(folder, filename)
-            if os.path.isfile(file_path):
-                file_age = now - os.path.getmtime(file_path)
-                if file_age > lifetime:
-                    try:
-                        os.remove(file_path)
-                        print(f"Deleted: {file_path}")
-                    except Exception as e:
-                        print(f"Failed to delete {file_path}: {e}")
+            if os.path.isfile(file_path) and now - os.path.getmtime(file_path) > lifetime:
+                try:
+                    os.remove(file_path)
+                    print(f"[CLEANUP] Deleted: {file_path}")
+                except Exception as e:
+                    print(f"[CLEANUP ERROR] Failed to delete {file_path}: {e}")
         time.sleep(600)
 
 @app.route('/', methods=['POST'])
@@ -130,8 +141,8 @@ def predict():
     probs = outputs[0][0]
     pred_idx = int(np.argmax(probs))
     pred_class = class_names[pred_idx]
-
     confidence = float(probs[pred_idx] * 100)
+
     description, prevention = generate_description_and_prevention(pred_class)
 
     return jsonify({
