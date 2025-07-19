@@ -8,6 +8,7 @@ import openai
 from dotenv import load_dotenv
 import threading
 import time
+import ast
 
 # Load environment variables
 load_dotenv()
@@ -17,21 +18,27 @@ CORS(app)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Load class names
+# Load and clean class names
 with open('class_names.txt', 'r') as f:
-    class_names = [line.strip() for line in f.readlines()]
+    line = f.read()
 
-# Load model
+# Parse list and assign to class_names
+class_names = ast.literal_eval(line.replace("Classes: ", "").strip())
+
+# Overwrite file with clean class names (optional)
+with open('class_names.txt', 'w') as f:
+    for cls in class_names:
+        f.write(cls + '\n')
+
+# Load ONNX model
 learn = ort.InferenceSession("model.onnx")
 
-# Azure OpenAI config
+# Azure OpenAI setup
 openai.api_type = "azure"
 openai.api_base = os.getenv("AZURE_OPENAI_ENDPOINT")
 openai.api_version = "2024-12-01-preview"
 openai.api_key = os.getenv("AZURE_OPENAI_KEY")
-
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT")
-
 
 def generate_description_and_prevention(label):
     if label == "not_a_crop":
@@ -68,16 +75,16 @@ def generate_description_and_prevention(label):
     content = response.choices[0].message.content
     description = "No description available."
     prevention = "No prevention steps available."
-    
+
     if "Description:" in content and "Prevention:" in content:
         try:
             parts = content.split("Prevention:")
             description = parts[0].replace("Description:", "").strip()
             prevention = parts[1].strip()
-        except:
+        except Exception:
             pass
-    return description, prevention
 
+    return description, prevention
 
 def preprocess_image(image, size=(224, 224)):
     image = image.resize(size)
@@ -85,7 +92,6 @@ def preprocess_image(image, size=(224, 224)):
     img_array = img_array.transpose(2, 0, 1)
     img_array = np.expand_dims(img_array, axis=0)
     return img_array
-
 
 def cleanup_uploads(folder, lifetime=3600):
     while True:
@@ -101,7 +107,6 @@ def cleanup_uploads(folder, lifetime=3600):
                     except Exception as e:
                         print(f"Failed to delete {file_path}: {e}")
         time.sleep(600)
-
 
 @app.route('/', methods=['POST'])
 def predict():
@@ -123,7 +128,7 @@ def predict():
     input_name = learn.get_inputs()[0].name
     outputs = learn.run(None, {input_name: input_tensor})
     probs = outputs[0][0]
-    pred_idx = np.argmax(probs)
+    pred_idx = int(np.argmax(probs))
     pred_class = class_names[pred_idx]
 
     confidence = float(probs[pred_idx] * 100)
@@ -136,7 +141,6 @@ def predict():
         'prevention': prevention,
         'image_url': image_url
     })
-
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5001))
