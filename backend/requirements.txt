@@ -1,7 +1,6 @@
-flask
-flask-cors
 pillow
 numpy
 onnxruntime
 openai>=1.0.0
 dotenv
+gradio
