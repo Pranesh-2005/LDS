@@ -6,16 +6,18 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import { Client } from "@gradio/client"
+
+interface GradioResponse {
+  data: [any, number, string, string]
+}
 
 interface PredictionResult {
   prediction: string
   confidence: number
   description: string
   prevention: string
-  image_url: string
 }
-
-const BACKEND_URL = "https://lds-bw2e.onrender.com"
 
 export default function LeafDiseaseClassifier() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -36,7 +38,6 @@ export default function LeafDiseaseClassifier() {
     }
   }, [])
 
-  // Drag & Drop handlers
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
@@ -59,7 +60,6 @@ export default function LeafDiseaseClassifier() {
     setIsDragOver(false)
   }, [])
 
-  // File input change
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       handleFileSelect(e.target.files[0])
@@ -76,25 +76,40 @@ export default function LeafDiseaseClassifier() {
     setError(null)
 
     try {
-      const formData = new FormData()
-      formData.append("file", selectedFile)
+      const client = await Client.connect("PraneshJs/LDS-deploy-for-Surya")
 
-      const response = await fetch(`${BACKEND_URL}/`, {
-        method: "POST",
-        body: formData,
-      })
+      const result = (await client.predict("/predict", {
+        image: selectedFile,
+      })) as GradioResponse
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Backend error response:", errorText)
-        throw new Error("Failed to classify image")
+      if (!Array.isArray(result.data) || result.data.length !== 4) {
+        throw new Error("Invalid response format from server")
       }
 
-      const data: PredictionResult = await response.json()
-      setResult(data)
+      const [predictionRaw, confidence, description, prevention] = result.data
+
+      let prediction: string
+      if (typeof predictionRaw === "object" && predictionRaw !== null) {
+        prediction = predictionRaw.label || JSON.stringify(predictionRaw)
+      } else {
+        prediction = String(predictionRaw)
+      }
+
+      if (!prediction || typeof confidence !== "number") {
+        throw new Error("Invalid prediction data received")
+      }
+
+      setResult({
+        prediction,
+        confidence: Number(confidence),
+        description: String(description || ""),
+        prevention: String(prevention || ""),
+      })
     } catch (err) {
-      setError("Failed to classify the image. Please make sure the backend is running and accessible.")
-      console.error("Error:", err)
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to classify the image. Please try again."
+      setError(errorMessage)
+      console.error("Prediction error:", err)
       setResult(null)
     } finally {
       setIsLoading(false)
@@ -110,7 +125,6 @@ export default function LeafDiseaseClassifier() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 p-4">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
             <div className="p-3 bg-green-600 rounded-full">
@@ -124,7 +138,6 @@ export default function LeafDiseaseClassifier() {
         </div>
 
         <div className="grid lg:grid-cols-2 gap-8">
-          {/* Upload Section */}
           <Card className="h-fit relative">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -134,7 +147,6 @@ export default function LeafDiseaseClassifier() {
               <CardDescription>Drag and drop an image or tap to browse</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Upload Area with fixed mobile support */}
               <label
                 htmlFor="file-input"
                 className={`relative block border-2 border-dashed rounded-lg p-8 text-center cursor-pointer select-none
@@ -164,19 +176,16 @@ export default function LeafDiseaseClassifier() {
                     <p className="text-sm text-gray-500">or tap to browse files</p>
                   </>
                 )}
-                {/* Invisible input covers entire label for tap support */}
                 <input
-  id="file-input"
-  type="file"
-  accept="image/*"
-  onChange={handleFileInputChange}
-  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-  aria-label="Upload leaf image"
-/>
-
+                  id="file-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileInputChange}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  aria-label="Upload leaf image"
+                />
               </label>
 
-              {/* Action Buttons */}
               <div className="flex gap-3">
                 <Button
                   type="button"
@@ -213,7 +222,6 @@ export default function LeafDiseaseClassifier() {
                 )}
               </div>
 
-              {/* Error Alert */}
               {error && (
                 <Alert variant="destructive" className="mt-2">
                   <AlertCircle className="h-4 w-4" />
@@ -223,7 +231,6 @@ export default function LeafDiseaseClassifier() {
             </CardContent>
           </Card>
 
-          {/* Results Section */}
           {result && (
             <Card>
               <CardHeader>
@@ -233,7 +240,6 @@ export default function LeafDiseaseClassifier() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Prediction */}
                 <div className="space-y-2">
                   <h3 className="font-semibold text-lg">Disease Identified</h3>
                   <div className="flex items-center gap-3">
@@ -246,29 +252,22 @@ export default function LeafDiseaseClassifier() {
                   </div>
                 </div>
 
-                {/* Description */}
                 <div className="space-y-2">
                   <h3 className="font-semibold">Description</h3>
                   <p className="text-gray-700 leading-relaxed">{result.description}</p>
                 </div>
 
-                {/* Prevention */}
                 <div className="space-y-2">
                   <h3 className="font-semibold">Prevention</h3>
                   <p className="text-gray-700 leading-relaxed">{result.prevention}</p>
                 </div>
 
-                {/* Uploaded Image */}
                 <div className="space-y-2">
                   <h3 className="font-semibold">Uploaded Image</h3>
                   <img
-                    src={`${BACKEND_URL}${result.image_url}`}
+                    src={previewUrl || ""}
                     alt="Uploaded leaf"
                     className="max-w-full max-h-64 rounded-lg shadow-md object-contain"
-                    onError={(e) => {
-                      // fallback if image URL is broken
-                      (e.currentTarget as HTMLImageElement).src = previewUrl || ""
-                    }}
                   />
                 </div>
               </CardContent>
